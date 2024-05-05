@@ -53,29 +53,36 @@ def calculate_rouge_scores(generated_answers, ground_truth):
   average_rougeL = total_rougeL / len(generated_answers)
   return average_rouge1, average_rouge2, average_rougeL
 
+# Create a BERTScorer object with 'bert-base-uncased' pre-trained model for semantic similarity evaluation.
+scorer = BERTScorer(model_type='bert-base-uncased')
 
 
-def calculate_bert_score(generated_answers, ground_truth):
+def store_bert_scores_in_dataset(dataset):
   """
-  Calculates BERTScore for machine translation outputs.
+  Calculates BERTScore for each data point and stores them in the dataset.
 
   Args:
-      generated_answers: A list of strings containing the machine-generated translations.
-      ground_truth: A list of strings representing the human-written reference translations.
+      dataset: A pandas DataFrame containing 'Finetuned_answer' and 'answer' columns.
 
   Returns:
-      None (prints BERTScore Precision, Recall, and F1 scores).
+      A tuple containing average precision, recall, and F1 scores.
   """
-
-  # Create a BERTScorer object with 'bert-base-uncased' pre-trained model for semantic similarity evaluation.
   scorer = BERTScorer(model_type='bert-base-uncased')
-  # This line creates an instance of BERTScorer, likely utilizing a library.
-  # The 'bert-base-uncased' model type specifies a pre-trained transformer model used for semantic similarity assessment.
 
-  # Calculate Precision, Recall, and F1 score for each pair of generated answer and ground truth reference.
-  P, R, F1 = scorer.score(generated_answers, ground_truth)
-  avg_precision = sum(p.mean() for p in P) / len(P)
-  avg_recall = sum(r.mean() for r in R) / len(R)
-  avg_f1 = sum(f1.mean() for f1 in F1) / len(F1)
+  try:
+    if 'Finetuned_answer' not in dataset.columns or 'answer' not in dataset.columns:
+      raise ValueError("Required columns 'Finetuned_answer' and 'answer' not found in dataset")
 
-  return avg_precision, avg_recall, avg_f1
+    P, R, F1 = scorer.score(dataset['Finetuned_answer'], dataset['answer'])
+    dataset['BERTScore_Precision'] = P
+    dataset['BERTScore_Recall'] = R
+    dataset['BERTScore_F1'] = F1
+
+    avg_precision = P.mean()
+    avg_recall = R.mean()
+    avg_f1 = F1.mean()
+
+    return avg_precision, avg_recall, avg_f1
+  except ValueError as e:
+    print(f"Error: {e}")
+    return None
