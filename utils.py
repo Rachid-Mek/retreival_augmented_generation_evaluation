@@ -1,6 +1,8 @@
+import re
+
 def extract_text(results):
   """
-  Extracts informative text from machine responses, handling specific formatting.
+  Extracts informative text from machine responses, handling specific formatting using regular expressions.
 
   Args:
       results: A list of strings containing machine responses.
@@ -8,20 +10,11 @@ def extract_text(results):
   Returns:
       A list of strings containing the extracted text from each response.
   """
+  pattern = r"(According to|Based on)\s+.*?,"  # Matches "According to" or "Based on" followed by anything until a comma (,)
+  extracted_text = []
+  for result in results:
+    # Substitute the matched pattern with an empty string
+    cleaned_text = re.sub(pattern, "", result, flags=re.IGNORECASE)
+    extracted_text.append(cleaned_text.strip())  # Remove leading/trailing whitespaces
 
-  extracted_texts = []
-
-  for text in results:
-    # Split text based on special markers
-    parts = text.split("<|eot_id|>")  # Split at end-of-turn marker
-    if len(parts) > 1:
-      # Extract text after assistant header
-      assistant_response = parts[-1].split("<|start_header_id|>assistant<|end_header_id|>")
-      if len(assistant_response) > 1:
-        extracted_texts.append(assistant_response[1].strip())  # Extract and clean assistant response
-      else:
-        print(f"Assistant response not found for: {text}")  # Informative message for missing response
-    else:
-      print(f"Unexpected format for response: {text}")  # Informative message for unexpected format
-
-  return extracted_texts
+  return extracted_text

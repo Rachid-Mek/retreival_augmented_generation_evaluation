@@ -1,88 +1,54 @@
 from nltk.translate.bleu_score import corpus_bleu
 from rouge_score import rouge_scorer
 from bert_score import BERTScorer
+import nltk
+nltk.download('punkt')
 
 
-def calculate_bleu_score(machine_results, reference_texts):
-  """
-  Calculates BLEU score for machine translation outputs.
+class Generation:
+    def __init__(self):
+        # Initialize the BERTScorer only once, assuming it's expensive to load.
+        self.bert_scorer = BERTScorer(model_type='bert-base-uncased')
+    
+    def calculate_bleu_score(self, machine_results, reference_texts):
+        """
+        Calculates BLEU score for machine translation outputs.
+        """
+        tokenized_references = [[nltk.word_tokenize(ref)] for ref in reference_texts]
+        tokenized_machines = [nltk.word_tokenize(result) for result in machine_results]
+        return corpus_bleu(tokenized_references, tokenized_machines)
+    
+    def calculate_rouge_scores(self, generated_answers, ground_truth):
+        """
+        Calculates ROUGE scores (ROUGE-1, ROUGE-2, ROUGE-L) for machine translation outputs.
+        """
+        scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
+        total_rouge1, total_rouge2, total_rougeL = 0, 0, 0
 
-  Args:
-      machine_results: A list of strings containing the machine-generated translations.
-      reference_texts: A list of strings representing the human-written reference translations.
+        for gen, ref in zip(generated_answers, ground_truth):
+            scores = scorer.score(gen, ref)
+            total_rouge1 += scores['rouge1'].fmeasure
+            total_rouge2 += scores['rouge2'].fmeasure
+            total_rougeL += scores['rougeL'].fmeasure
 
-  Returns:
-      None (prints the BLEU score).
-  """
+        num_answers = len(generated_answers)
+        return (total_rouge1 / num_answers, total_rouge2 / num_answers, total_rougeL / num_answers)
+    
+    def calculate_bert_score(self, dataset, generated_answers, ground_truth):
+        """
+        Calculates BERT scores for machine translation outputs and appends results to the dataset.
+        """
+        P, R, F1 = self.bert_scorer.score(generated_answers, ground_truth)
+        bertscore_precision = [round(p.mean().item(), 4) for p in P]
+        bertscore_recall = [round(r.mean().item(), 4) for r in R]
+        bertscore_f1 = [round(f1.mean().item(), 4) for f1 in F1]
 
-  # Split each reference text and machine translation result into individual words.
-  reference_texts = [[ref.split() for ref in reference_texts]]  # List of lists for corpus_bleu
-  machine_translations = [gen.split() for gen in machine_results]
-  bleu_score = corpus_bleu(reference_texts, machine_translations)
+        dataset['BERTScore_Precision'] = bertscore_precision
+        dataset['BERTScore_Recall'] = bertscore_recall
+        dataset['BERTScore_F1'] = bertscore_f1
 
-  return bleu_score
+        avg_precision = sum(bertscore_precision) / len(bertscore_precision)
+        avg_recall = sum(bertscore_recall) / len(bertscore_recall)
+        avg_f1 = sum(bertscore_f1) / len(bertscore_f1)
 
-
-
-def calculate_rouge_scores(generated_answers, ground_truth):
-  """
-  Calculates ROUGE scores (ROUGE-1, ROUGE-2, ROUGE-L) for machine translation outputs.
-
-  Args:
-      generated_answers: A list of strings containing the machine-generated translations.
-      ground_truth: A list of strings representing the human-written reference translations.
-
-  Returns:
-      None (prints the average ROUGE-1, ROUGE-2, and ROUGE-L scores).
-  """
-
-  scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
-  total_rouge1, total_rouge2, total_rougeL = 0, 0, 0
-
-  # Iterate through each pair of generated answer and its corresponding ground truth reference.
-  for gen, ref in zip(generated_answers, ground_truth):
-    # Calculate individual ROUGE-1, ROUGE-2, and ROUGE-L scores for each pair using the scorer object.
-    scores = scorer.score(gen, ref)
-    total_rouge1 += scores['rouge1'].fmeasure
-    total_rouge2 += scores['rouge2'].fmeasure
-    total_rougeL += scores['rougeL'].fmeasure
-
-  # Calculate average scores for each ROUGE metric by dividing the total scores by the number of generated answers.
-  average_rouge1 = total_rouge1 / len(generated_answers)
-  average_rouge2 = total_rouge2 / len(generated_answers)
-  average_rougeL = total_rougeL / len(generated_answers)
-  return average_rouge1, average_rouge2, average_rougeL
-
-# Create a BERTScorer object with 'bert-base-uncased' pre-trained model for semantic similarity evaluation.
-scorer = BERTScorer(model_type='bert-base-uncased')
-
-
-def store_bert_scores_in_dataset(dataset):
-  """
-  Calculates BERTScore for each data point and stores them in the dataset.
-
-  Args:
-      dataset: A pandas DataFrame containing 'Finetuned_answer' and 'answer' columns.
-
-  Returns:
-      A tuple containing average precision, recall, and F1 scores.
-  """
-  scorer = BERTScorer(model_type='bert-base-uncased')
-
-  try:
-    if 'Finetuned_answer' not in dataset.columns or 'answer' not in dataset.columns:
-      raise ValueError("Required columns 'Finetuned_answer' and 'answer' not found in dataset")
-
-    P, R, F1 = scorer.score(dataset['Finetuned_answer'], dataset['answer'])
-    dataset['BERTScore_Precision'] = P
-    dataset['BERTScore_Recall'] = R
-    dataset['BERTScore_F1'] = F1
-
-    avg_precision = P.mean()
-    avg_recall = R.mean()
-    avg_f1 = F1.mean()
-
-    return avg_precision, avg_recall, avg_f1
-  except ValueError as e:
-    print(f"Error: {e}")
-    return None
+        return dataset, avg_precision, avg_recall, avg_f1
