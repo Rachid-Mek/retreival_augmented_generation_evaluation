@@ -56,9 +56,6 @@ docs/_build/
 *.csv
 *.docx
 
-#ignore folder Notebooks
-Notebooks/ 
-
 #venv
 venv/
 
