@@ -50,7 +50,7 @@ coverage.xml
 docs/_build/
 
 # PyBuilder
-*.ipynb
+.ipynb
 
 #ignore csv files
 *.csv

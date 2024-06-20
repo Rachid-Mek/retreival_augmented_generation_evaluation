@@ -1,14 +1,22 @@
 from nltk.translate.bleu_score import corpus_bleu
 from rouge_score import rouge_scorer
 from bert_score import BERTScorer
+import torch
+import torch.nn.functional as F
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import nltk
 nltk.download('punkt')
 
 
 class Generation:
     def __init__(self):
-        # Initialize the BERTScorer only once, assuming it's expensive to load.
+        # Initialize the BERTScorer.
         self.bert_scorer = BERTScorer(model_type='bert-base-uncased')
+        self.tokenizer = AutoTokenizer.from_pretrained('textattack/bert-base-uncased-MNLI')
+        self.model = AutoModelForSequenceClassification.from_pretrained('textattack/bert-base-uncased-MNLI')
+        self.model.eval() 
+        if torch.cuda.is_available():
+            self.model.cuda()  # Transfer the model to GPU if available
     
     def calculate_bleu_score(self, machine_results, reference_texts):
         """
@@ -52,3 +60,37 @@ class Generation:
         avg_f1 = sum(bertscore_f1) / len(bertscore_f1)
 
         return dataset, avg_precision, avg_recall, avg_f1
+    
+
+
+    def predict_entailment(self, premise, hypothesis):
+        """
+        Predicts the probability of entailment between two sentences using DeBERTa.
+
+        Args:
+            premise: The first sentence (premise).
+            hypothesis: The second sentence (hypothesis).
+
+        Returns:
+            The probability of the 'entailment' label.
+        """
+        # Preprocess sentences (tokenization)
+        inputs = self.tokenizer(premise, hypothesis, return_tensors="pt")
+        if torch.cuda.is_available():
+            inputs = {k: v.cuda() for k, v in inputs.items()}  # Ensure inputs are on the same device as the model
+
+        # Perform prediction
+        outputs = self.model(**inputs)
+        predictions = F.softmax(outputs.logits, dim=-1)
+        entailment_prob = predictions[0, 0].item()
+
+        return entailment_prob
+    
+    def entailement(self, row):
+        premise = row['context']
+        hypothesis = row['Finetuned_answer']
+        entailment_prob = self.predict_entailment(premise, hypothesis)
+        row["entailement_score"] = entailment_prob
+        return row
+    
+    
