@@ -92,5 +92,3 @@ class Generation:
         entailment_prob = self.predict_entailment(premise, hypothesis)
         row["entailement_score"] = entailment_prob
         return row
-    
-    
